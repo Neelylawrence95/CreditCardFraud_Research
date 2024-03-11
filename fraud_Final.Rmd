@@ -1,0 +1,310 @@
+---
+title: "Final Project"
+author: "Law Neely"
+date: "2024-02-27"
+output: pdf_document
+---
+
+# Data Background: 
+
+For my Research Report, I decided the dataset I wanted to work on was a credit card fraud transaction dataset. The dataset has over 550,000 rows of data. The variables in the dataset that I will be using are: 
+
+merchant: The name of the merchant where the transaction occurred.
+category: The category of the transaction (e.g., entertainment, kids/pets, health/fitness, personal care).
+amt: The amount of the transaction.
+city: The city where the transaction occurred.
+state: The state where the transaction occurred.
+job: The occupation or job title of the cardholder.
+is_fraud: A binary indicator (0 or 1) indicating whether the transaction is fraudulent.
+
+
+I removed some of the columns such as first(first name), last(last name), etc. from my dataset because they were unneeded for the research I was doing. 
+
+I wanted to work on this dataset because during my time in this class I became intrigued with the risk management organization and utilizing data analytics to solve questions in that field. I am looking at it as a future career path and I believe this was a great idea of a real world scenario a Risk Analyst/Modeler may face. 
+
+## Research Questions: 
+
+I had a plethora of questions I wanted to answer about the dataset such as: 
+
+What are the common characteristics of fraudulent transactions compared to legitimate transactions?
+Is there a correlation between transaction amount and the likelihood of fraud?
+Do certain merchant categories have higher instances of fraudulent transactions?
+Are there specific geographical locations (cities or states) where fraud is more prevalent?
+Is there a pattern in the time of day or day of the week when fraudulent transactions occur?
+Do fraudulent transactions tend to involve certain types of jobs or industries?
+Can we predict the likelihood of a transaction being fraudulent based on certain features such as transaction amount, merchant category, location)?
+What are the most significant fraud categories?
+What are the most common fraud categories based on state?
+
+The questions I chose to focus on for this report are:
+Is there a correlation between transaction amount and the likelihood of fraud? 
+How do transactions amounts, categories, and region interact to affect the probability of fraud in credit card transactions?
+```{r setup, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(MLmetrics)
+library(caret)
+library(ggplot2)
+library(leaflet)
+library(eeptools)
+library(modeldata)
+library(randomForest)
+library(class)
+```
+
+First things I needed to load in the data and I wanted to partition the dataset to test with 10% of the original dataset. So then we are only looking at around 55,000 rows compared to 550,000. I had to make sure that it was a proportionate amount of fraudalent and legitimate transactions so I used the createDatapartition() function from the caret package to achieve a stratified sample. 
+```{r, echo = FALSE}
+# setwd("Users/lawrenceneely/Documents")
+
+# read in the dataset csv file
+credit_fraud <- read.csv("credit_card_fraud(v1).csv")
+
+fraud_tibble <- as_tibble(credit_fraud)
+View(credit_fraud)
+```
+```{r pressure, echo=FALSE}
+# partition the dataset to test with 10% of the original dataset
+fraud_sample <- createDataPartition(credit_fraud$is_fraud, p=0.1, list=FALSE)
+
+strat_sample <- credit_fraud[fraud_sample, ]
+
+#View(strat_sample)
+```
+
+Next I removed the unneccessary columns and created new variables such as transaction_type and category_g to convert those variables to categorical variables.  Then I added a new column for the amount range to put the amounts in different groups to make it easier to analyze. 
+```{r, echo = FALSE}
+# remove unncessary columns
+fraud_categories <- strat_sample %>%
+ select(merchant,category,amt,first,last,city,state,city_pop,job,dob,is_fraud)
+
+# create new variable to convert is_fraud variable to categorical
+fraud_categories <- fraud_categories %>% 
+  mutate(transaction_type = if_else(is_fraud == 0,"legitimate", "fraud" ))
+
+fraud_categories$transaction_type <- as.factor(fraud_categories$transaction_type)
+levels(fraud_categories$transaction_type) <- c("legitimate","fraud")
+
+# add new column to categorize the categories
+categorize_categories <- function(category) {
+  if (category %in% c("entertainment", "food_dining")) {
+    return("Ent/Food")
+  } else if (category %in% c("gas_transport", "travel")) {
+    return("Transp/Trav")
+  } else if (category %in% c("grocery_net", "grocery_pos")) {
+    return("Groc")
+  } else if (category %in% c("health_fitness", "personal_care")) {
+    return("Health/PC")
+  } else if (category %in% c("home", "kids_pets")) {
+    return("Home/Kids_Pets")
+  } else if (category %in% c("misc_net", "misc_pos")) {
+    return("Misc")
+  } else if (category %in% c("shopping_net", "shopping_pos")) {
+    return("Shop")
+  } else {
+    return("Other")
+  }
+}
+
+# Apply the function to create a new column
+fraud_categories <- fraud_categories %>%
+  mutate(category_g = sapply(category, categorize_categories))
+
+fraud_categories <- as.data.frame(fraud_categories)
+
+
+#fraud_categories$amt
+breaks <- c(0, 100, 500, 1000, 5000, 10000, 20000)
+
+fraud_categories$amt_range <- cut(fraud_categories$amt, breaks = breaks, labels = c("0-100","101-500","501-1000","1001-5000","5001-10000","10001-20000"), include.lowest = TRUE)
+# logistic regression with is_fraud as outcome variable and category as predictor variable
+#logreg_fraud <- glm(is_fraud ~ category, data = fraud_categories, family = binomial)
+
+# select the most significant categories in the dataset
+#significant_categories <- c("grocery_pos","misc_net","shopping_net","shopping_pos")
+
+#significant_fraud_categories <- fraud_categories[fraud_categories$category %in% significant_categories,] 
+  
+
+#fraud_proportions <- with(significant_fraud_categories, tapply(is_fraud, category, mean))
+
+#print(fraud_proportions)
+
+#View(fraud_categories)
+
+```
+
+# Data Visualization
+
+To begin my Data Visualizations; first I did a simple bar chart to see the average fraud probability by category group. 
+I was able to identify that the top 3 category groups for fraudalent transactions are Shopping, Groceries, and Miscallenaous 
+```{r, echo = FALSE}
+# Calculate average fraud probability for each category_group
+avg_prob_by_category <- fraud_categories %>%
+  group_by(category_g) %>%
+  summarize(avg_prob = mean(is_fraud))
+```
+```{r, echo = FALSE}
+# Create a bar plot
+ggplot(avg_prob_by_category, aes(x = category_g, y = avg_prob)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Fig 1: Average Fraud Probability by Category Group",
+       x = "Category Group",
+       y = "Average Fraud Probability") +
+  theme_minimal()
+
+```
+
+```{r, echo = FALSE}
+# retrieve coefficients from the logistic regression
+#coefficients <- coef(logreg_fraud)
+#errors <- summary(logreg_fraud)$coefficients[, "Std. Error"]
+
+#lower <- coefficients - 1.96 * errors
+#upper <- coefficients + 1.96 * errors
+
+#coef.df <- data.frame(
+#  category = names(coefficients),
+ # coef = coefficients,
+#  lower = lower,
+#  upper = upper
+#)
+# select top 5
+#top_categories <- coef.df %>%
+#  arrange(desc(abs(coef))) %>%
+#  slice(1:5)
+
+#ggplot(top_categories, aes(x = reorder(category,coef), y = coef, ymin = lower, ymax = upper)) + 
+#  geom_bar(stat = "identity", fill = "skyblue") + 
+#  geom_errorbar(width = 0.2, aes(ymin = lower, ymax = upper), color = "black") + 
+#  coord_flip() + 
+#  labs(title = "Coefficients of Shopping Fraud Categories", 
+#       x = "Category", 
+#       y = "Coefficient") + 
+#  theme_minimal()
+
+
+```
+
+The next question I wanted to identify was if the US regions had any significance to fraudalent transactions. I add a new column called 'region' and split the states up into their appropriate region. I then completed a logistic regression to determine if the regions had any significance but unfortunately the regions did not.
+```{r, echo = FALSE} 
+fraud_categories <- fraud_categories %>%
+    mutate(region = ifelse(state %in% c("AK", "CA", "OR", "WA","NV","UT","CO","WY","MT","ID","HI"), "West",
+                ifelse(state %in% c("TX", "OK", "NM", "AZ"), "Southwest",
+                ifelse(state %in% c("NY", "PA", "NJ", "MA","VT","NH","CT","ME","MD","DE","RI"), "Northeast",
+                ifelse(state %in% c("FL", "GA", "AL", "MS","DC","WV","VA","NC","SC","LA","AR","KY","TN"), "Southeast",
+                ifelse(state %in% c("IL", "OH", "MI", "WI","IA","MN","KS","NE","SD","ND","MO","IN"), "Midwest", "Other"))))))
+
+```
+```{r, echo = FALSE}
+
+# logistic regression with is_fraud as outcome and category,region, and amt_range as predictors
+logreg_fraud3 <- glm(is_fraud ~ category + region + amt_range, data = fraud_categories, family = binomial)
+
+fraud_categories$predicted_fraud <- predict(logreg_fraud3, newdata = fraud_categories, type = "response")
+
+#summary(logreg_fraud3)
+#exp(logreg_fraud3$coefficients)
+```
+Thanks to the logistic regression I was able to identify that the amount ranges of 101-500,501-1000, and 1001-5000 had a high significance which let me identify that transactions within those ranges have a higher chance of being fraudalent.
+
+I created a scatterplot for the Transaction Amount Range vs Probability of Fraud to visualize the ranges with the highest probability for fraud while also adding color to symbolize the transaction category. 
+```{r,echo = FALSE, warning=FALSE}
+  ggplot(data = fraud_categories, aes(x = amt_range, y = predicted_fraud, color = category)) +
+    geom_point() +
+    geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+    labs(title = "Fig 2: Transaction Amount Range vs. Probability of Fraud", x = "Transaction Amount Range", y = "Probability of Fraud") +
+    theme_minimal()
+
+# Assuming 'model' is your logistic regression model
+#predicted <- predict(logreg_fraud3, newdata = fraud_categories, type = "response")
+#predicted_class <- ifelse(predicted > 0.5, 1, 0) # Convert probabilities to binary classes
+
+# Calculate accuracy
+#accuracy <- mean(predicted_class == fraud_categories$is_fraud)
+#Accuracy(y_pred = predicted_class, y_true = fraud_categories$is_fraud)
+# Create confusion matrix
+#conf_matrix <- table(Actual = fraud_categories$is_fraud, Predicted = predicted_class)
+#ConfusionMatrix(y_pred = predicted_class, y_true = fraud_categories$is_fraud)
+#accuracy
+
+#conf_matrix
+```
+With the visualization above though it can be a little hard to tell which amount range is more significant for which transactional cateogry. To figure that out I decided to do another logistic regression to show the interaction between category and transaction amount range.
+
+To do that I had to first convert the amount range column to numeric. So I added a new column called amt_range_g to do that.
+```{r,echo = FALSE} 
+convert_range_to_numeric <- function(range) {
+  # Split the range string by "-"
+  range_parts <- strsplit(range, "-")[[1]]
+  # Take the first part of the range as the numeric value
+  numeric_value <- as.numeric(range_parts[1])
+  return(numeric_value)
+}
+fraud_categories$amt_range <- as.character(fraud_categories$amt_range)
+
+fraud_categories$amt_range_g <- sapply(fraud_categories$amt_range, convert_range_to_numeric)
+
+#View(fraud_categories)
+
+```
+Then I completed another logistic regression instead using category_group * amt_range_g to see the interactions of the two variables. 
+```{r, echo=FALSE,warning=FALSE}
+# logistic regression with is_fraud as outcome but category and amount range groups as the predictor variables.
+logreg_fraud_grouped <- glm(is_fraud ~ category_g * amt_range_g, data = fraud_categories, family = binomial)
+```
+```{r,echo=FALSE} 
+#summary(logreg_fraud4)
+
+#exp(logreg_fraud4$coefficients)
+#predicted2 <- predict(logreg_fraud4, newdata = fraud_categories, type = "response")
+#predicted_class2 <- ifelse(predicted2 > 0.5, 1, 0) # Convert probabilities to binary classes
+
+# Calculate accuracy
+#accuracy <- mean(predicted_class == fraud_categories$is_fraud)
+# Accuracy(y_pred = predicted_class2, y_true = fraud_categories$is_fraud)
+# Create confusion matrix
+#conf_matrix <- table(Actual = fraud_categories$is_fraud, Predicted = predicted_class)
+# ConfusionMatrix(y_pred = predicted_class2, y_true = fraud_categories$is_fraud)
+```
+From that logistic regression I created a plot to show the coefficients from the logistic regression.
+The coefficients do show that the interaction between category and transaction amount range can actually affect fraud probability especially with Shopping and Miscellaneous categories showing higher probabilities of fraud.
+```{r, echo = FALSE}
+# Extract coefficients
+coefficients <- summary(logreg_fraud_grouped)$coefficients
+
+# Create a dataframe from coefficients
+coefficients_df <- as.data.frame(coefficients)
+
+# Plot coefficients
+ggplot(coefficients_df, aes(x = row.names(coefficients_df), y = Estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = Estimate - 1.96 * `Std. Error`, ymax = Estimate + 1.96 * `Std. Error`), width = 0.2) +
+  coord_flip() +
+  labs(title = "Fig 3: Coeffs from Logistic Regression Model",
+       x = "Variables",
+       y = "Estimate")
+```
+
+# Summary:
+
+## Methodology:
+
+I used logistic regressions to analyze the relationship between transaction variables and fraud probability. I think logistic regression was the optimal choice since i had binary outcomes. 
+
+My analysis identified significant transaction amount ranges that have higher probabilities of fraud, such as 501-1000 and 1001-5000. The logistic regression model also showed interactions between transaction categories and amount ranges, revealing that Shopping and Miscellaneous categories have higher probabilities of fraud and the probability increases when amount range interacts with them. 
+
+## Data Visualization Recap: 
+
+I think that my bar chart showing the average fraud probability by category group effectively highlights which categories have higher instances of fraud. 
+
+The scatterplot for Transaction Amount Range vs. Probability of Fraud provides a clear visualization of how transaction amount affects fraud probability. 
+
+# Conclusion:
+
+In conclusion, this analysis provided insights into the characteristics of fraudulent transactions in credit card data. By understanding these patterns, organizations can better detect and prevent fraud, leading to improved risk management strategies. 
+
+## Weaknesses and Implications:
+
+Logistic regression assumes linearity between variables and due to that may not capture the complex interactions. Also, the dataset size could impact my model's performance so further validation with more data and different models could improve some results. 
+From a moral and societal perspective, I think the big takeaway is that understanding fraud patterns can help protect consumers and improve financial security. From working in financial services I know how crucial that is and how models are constantly being testing and improved so this is a never ending battle to attempt to stop fraud but I believe with improved models we can continue to try and lower the probability and percentage of fraudulent transactions taking place. 
+
