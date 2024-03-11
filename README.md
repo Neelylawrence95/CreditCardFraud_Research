@@ -1,5 +1,5 @@
 # CreditCardFraud_Research
-a Research Report on a fake credit card fraud transaction dataset to uncover patterns and trends of fraudulent transactions
+a Research Report on a fake credit card fraud transaction dataset to uncover patterns and trends of fraudulent transactions using R programming language
 
 Go to fraud_Final.pdf to see Version_1 of the research report.
 
