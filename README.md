@@ -1,7 +1,7 @@
 # CreditCardFraud_Research
 a Research Report on a fake credit card fraud transaction dataset to uncover patterns and trends of fraudulent transactions using R programming language
 
-Go to fraud_Final.pdf to see Version_1 of the research report.
+Go to fraud_Final.pdf to see Version_1 of the research report in pdf format and fraud_Final.Rmd to see the R code in a R markdown file.
 
 Report will continue to be updated to answer more research questions and uncover even more insights on fraud trends within this dataset
 
